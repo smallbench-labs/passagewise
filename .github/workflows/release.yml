@@ -1,0 +1,79 @@
+# Based on the official Obsidian example:
+# https://docs.obsidian.md/Plugins/Releasing/Release+your+plugin+with+GitHub+Actions
+# Changes from the example: Node 22 (TypeScript 5.9 / esbuild 0.28), a check that the tag equals
+# manifest.json / package.json / versions.json, npm ci + npm test before the release, newer action versions.
+# Push a tag equal to the manifest version, without "v" (for example 0.1.0). The release is published directly
+# (not a draft) with exactly main.js, manifest.json and styles.css attached; their SHA-256 sums go in the
+# release notes instead of a separate SHA256SUMS asset (Obsidian's review only accepts the three plugin files).
+# Do not push a tag until submission day.
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Tag must equal manifest.json, package.json and versions.json
+        run: |
+          node -e '
+            const fs = require("fs");
+            const tag = process.argv[1];
+            const m = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const v = JSON.parse(fs.readFileSync("versions.json", "utf8"));
+            const errs = [];
+            if (m.version !== tag) errs.push(`manifest.json version ${m.version} != tag ${tag}`);
+            if (p.version !== tag) errs.push(`package.json version ${p.version} != tag ${tag}`);
+            if (v[tag] !== m.minAppVersion) errs.push(`versions.json[${tag}] != manifest minAppVersion ${m.minAppVersion}`);
+            if (errs.length) { errs.forEach((e) => console.log(`::error::${e}`)); process.exit(1); }
+          ' "${GITHUB_REF#refs/tags/}"
+
+      - name: Build plugin
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          {
+            echo "Passagewise $tag. Install from Obsidian's Community plugins, or copy these three files into .obsidian/plugins/passagewise/."
+            echo
+            echo "SHA-256:"
+            echo '```'
+            sha256sum main.js manifest.json styles.css
+            echo '```'
+            echo
+            echo "Build provenance: https://github.com/${GITHUB_REPOSITORY}/attestations"
+          } > release-notes.md
+
+          gh release create "$tag" \
+            --title="$tag" \
+            --notes-file release-notes.md \
+            main.js manifest.json styles.css

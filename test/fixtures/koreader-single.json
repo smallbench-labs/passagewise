@@ -1,0 +1,22 @@
+{
+  "title": "Pride and Prejudice",
+  "author": "Jane Austen",
+  "file": "/books/pride.epub",
+  "exported": true,
+  "number_of_pages": 300,
+  "created_on": 1706623978,
+  "version": "2024.01",
+  "entries": [
+    {
+      "text": "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.",
+      "note": "The famous opening.",
+      "page": "3",
+      "pageno": 3,
+      "chapter": "Chapter I",
+      "time": 1706623978,
+      "sort": "highlight",
+      "drawer": "lighten",
+      "color": "yellow"
+    }
+  ]
+}

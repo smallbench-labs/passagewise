@@ -1,0 +1,19 @@
+/* Purchase consent block (same layout and contrast fixes as Streakwise 0.2.1) */
+.pw-consent-block { display: flex; flex-direction: column; align-items: flex-start; margin-top: var(--size-4-2); }
+.pw-consent { display: flex; align-items: flex-start; gap: var(--size-4-2); min-height: 44px; padding: 12px 0; box-sizing: border-box; cursor: pointer; }
+.pw-consent input[type="checkbox"] { margin: 0.2em 0 0; flex: none; }
+.pw-consent-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.pw-consent-link { color: var(--text-accent); text-decoration: underline; }
+.theme-light .pw-consent-link { color: color-mix(in srgb, var(--text-accent) 65%, var(--text-normal)); }
+.pw-buy-button { margin-top: 8px; }
+.pw-buy-button[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.pw-consent-hint { margin-top: 6px; color: var(--text-muted); font-size: var(--font-ui-small); }
+.pw-consent-hint.pw-consent-hint-error { color: var(--text-error); }
+.theme-light .pw-consent-hint.pw-consent-hint-error { color: color-mix(in srgb, var(--text-error) 80%, var(--text-normal)); }
+.theme-dark .pw-consent-hint.pw-consent-hint-error { color: color-mix(in srgb, var(--text-error) 85%, var(--text-normal)); }
+.pw-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.pw-consent input[type="checkbox"]:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+
+.passagewise-settings .setting-item-description { line-height: 1.45; }
+.passagewise-suggestion-note { color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 2px; }
+.passagewise-file-input { display: none; }

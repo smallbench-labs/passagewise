@@ -1,0 +1,31 @@
+# Test fixture sources
+
+Every fixture is synthetic. Highlight *text* is taken from public-domain works, or is an original short sentence written for the test. No Amazon or Kobo account data was used, and nothing was scraped from a retail notebook page.
+
+The *structure* of each file follows public format descriptions. The format source is listed below. Copyrighted quotations found in those sources were not copied.
+
+| File | What it represents | Format source (structure only) | Text source |
+|---|---|---|---|
+| `clippings-en.txt` | English `My Clippings.txt`: highlight, note, bookmark, exact duplicate, range adjustment, extra blank line | [robertmartin8/KindleClippings README](https://github.com/robertmartin8/KindleClippings) (example block shape: title, `- Your Highlight … \| Added on …`, `==========`) | Jane Austen, *Pride and Prejudice* (1813); Lewis Carroll, *Alice's Adventures in Wonderland* (1865) |
+| `clippings-de.txt` | German Kindle UI metadata | [ctittel/kindle-clippings-extract-backup](https://github.com/ctittel/kindle-clippings-extract-backup) (`Ihre Markierung bei Position … \| Hinzugefügt am …`) | *Pride and Prejudice* |
+| `clippings-fr.txt` | French Kindle UI metadata | Keywords and date prefix documented in [nord342/rekindle `kindle.py`](https://github.com/nord342/rekindle/blob/main/src/rekindle/importers/kindle.py) (`Votre surlignement`, `emplacement`, `Ajouté le`) | *Pride and Prejudice* |
+| `clippings-es.txt` | Spanish Kindle UI metadata | Same rekindle importer (`Tu subrayado`, `posición`, `Añadido el`) | *Pride and Prejudice* |
+| `clippings-zh-cn.txt` | Simplified Chinese Kindle UI metadata | [Skywt2003/kindle-zhcn-clippings-to-json README](https://github.com/Skywt2003/kindle-zhcn-clippings-to-json); bookmark wording from [hadynz/obsidian-kindle-plugin#263](https://github.com/hadynz/obsidian-kindle-plugin/issues/263) (`您在第 … 页（位置 #…）的标注 \| 添加于 …`, `的书签`) | *論語* (public domain) |
+| `clippings-zh-tw.txt` | Traditional Chinese metadata | **Inferred**, not a device dump: traditional-character variant of the documented zh-CN pattern (`標註`, `頁`, `新增於`). Marked as unverified against a real Traditional-Chinese Kindle. | *論語* |
+| `clippings-ja.txt` | Japanese Kindle UI metadata, including a mixed English/Japanese line | Pattern from [kanjieater's Kindle-to-Anki gist](https://gist.github.com/kanjieater/ba3aa450ba7d6e7c5dc4c53077b6134f) (`ページ`, `位置No.`, `作成日:`, `ハイライト`) | Natsume Sōseki, *吾輩は猫である* (1905–1906), public domain |
+| `notebook.html` | Kindle app / notebook HTML export, including a following Note and a chapter heading | Class names and pairing from [AB1908/kindleHTML-to-markdown](https://github.com/AB1908/kindleHTML-to-markdown) and [picklecillo/inkdrop-import-kindle-highlights](https://github.com/picklecillo/inkdrop-import-kindle-highlights) (Android-style `div.noteHeading` / `div.noteText`; `Highlight (yellow) - … > Location n`) | *Pride and Prejudice*; original sample note written for the test |
+| `notebook-macos-broken.html` | macOS export with mismatched heading tags | Broken-tag example shape described in the picklecillo README (`h3.noteHeading` closed with `</div>`) | *Pride and Prejudice* |
+| `metadata.epub.lua` | KOReader sidecar, current `annotations` table plus `doc_props` | Field names from the public example at [Crossbill-Highlights/koreader-plugin examples/metadata.epub.lua](https://github.com/Crossbill-Highlights/koreader-plugin/blob/main/examples/metadata.epub.lua) (`annotations`, `chapter`, `datetime`, `pageno`, `pos0`, `pos1`, `text`, `drawer`). **No KOReader source was copied** (KOReader is AGPL). | *Pride and Prejudice*; *Alice's Adventures in Wonderland* |
+| `metadata-old.lua` | Older KOReader `highlight` + `bookmarks` sidecar shape | Publicly described older field names (`highlight` keyed by page, `bookmarks` with `notes` / `datetime` / `chapter`) | *Pride and Prejudice* |
+| `koreader-single.json` | KOReader JSON exporter, one book | Shape from [koreader/koreader `plugins/exporter.koplugin/target/json.lua`](https://github.com/koreader/koreader/blob/master/plugins/exporter.koplugin/target/json.lua) (`title`, `author`, `entries`, `exported`, `file`, `number_of_pages`, `created_on`, `version`) | *Pride and Prejudice* |
+| `koreader-multi.json` | KOReader JSON exporter, several books | Same exporter: `{ created_on, version, documents: [...] }` | *Pride and Prejudice*; *Alice's Adventures in Wonderland* |
+
+| `KoboReader.sqlite` | Kobo export database, page size 4096: highlights, a note, a hidden row, a dogear, a sideloaded book with no `content` row, and a long highlight (9,199 characters) that overflows a page | Schema from [boehs.org/node/kobo-sqlite](https://boehs.org/node/kobo-sqlite) and [valeriangalliat/kobo-highlights-to-calibre](https://github.com/valeriangalliat/kobo-highlights-to-calibre). The file was created with Python's `sqlite3` (standard library); it is not a copy of a device database. | Jane Austen, *Pride and Prejudice*; Lewis Carroll, *Alice's Adventures in Wonderland*; Mary Shelley, *Frankenstein* (all public domain) |
+| `kobo-pagesize-1024.sqlite` | Same rows as above, `PRAGMA page_size=1024`, to verify overflow handling on a smaller page | Same schema sources; also created with Python `sqlite3` | Same public-domain texts |
+| `not-kobo.sqlite` | A valid SQLite file without a `Bookmark` table, to check the error path | Created with Python `sqlite3` | Original one-line placeholder (`no bookmarks here`) |
+| `kobo-bookmarks-only.sqlite` | Same as `KoboReader.sqlite`, but every row turned into a text-less `dogear` (bookmark), to check the "bookmarks only" message (added 2026-11-21) | Derived from `KoboReader.sqlite` with Python `sqlite3` (`UPDATE Bookmark SET Type='dogear', Text=NULL, Annotation=NULL`) | No text |
+| `kobo-many-rows.sqlite` | 800 highlights for one book, `PRAGMA page_size=1024`, so the Bookmark table has interior b-tree pages; checks that rows come out in order (added 2026-11-21) | Same schema as `KoboReader.sqlite`; created with Python `sqlite3` | Original placeholder sentences (`Ordering test sentence number 0000 …`) |
+
+Public format notes that informed parsers but have no dedicated fixture:
+
+- Italian / Portuguese / Russian / Polish / Czech: keyword support only, from the same class of public importers. No device dump was available.

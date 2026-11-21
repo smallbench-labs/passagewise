@@ -1,0 +1,25 @@
+{
+  "name": "passagewise",
+  "version": "0.1.0",
+  "description": "Import ebook highlights into Obsidian notes without duplicates. Compatible with Kindle, Kobo, and KOReader export files.",
+  "scripts": {
+    "build": "tsc --noEmit -p . && node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "test": "esbuild test/run.ts --bundle --platform=node --outfile=out/run.cjs --log-level=warning && node out/run.cjs",
+    "lint": "eslint ."
+  },
+  "keywords": [],
+  "author": "Smallbench Labs",
+  "license": "MIT",
+  "private": true,
+  "type": "commonjs",
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.6.0",
+    "obsidian": "^1.14.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.2"
+  }
+}

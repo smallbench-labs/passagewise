@@ -1,0 +1,317 @@
+import { Clock, EMPTY_LICENSE, HttpPost, LicenseCache, LicenseConfig } from './types';
+
+const DAY = 24 * 60 * 60 * 1000;
+
+export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
+	organizationId: '189678f8-c892-4af0-8586-0bf2a6873e02',
+	// Passagewise Pro (Polar, created 2026-11-21): one-time US$12, license-key benefit with prefix
+	// PASSAGEWISE, 5 activations, no expiry. productId is real. benefitId is still a placeholder
+	// (not a UUID), so isConfigured() is false: Activate makes no network request and Pro never
+	// unlocks. Replace benefitId with the production benefit UUID when it is provided.
+	// Keys of other FormChime products (Docxwise, Streakwise) are rejected by the benefit_id check.
+	productId: '5cbf2191-abb9-4485-aa63-649bad01ca7d',
+	benefitId: 'PLACEHOLDER-passagewise-pro-benefit-id',
+	useActivations: true, // Polar benefit: 5 activations per key, keys never expire
+	portalUrl: 'https://polar.sh/formchime/portal',
+	apiBase: 'https://api.polar.sh',
+	gracePeriodMs: 604_800_000, // 7 days (literal so the free build can tree-shake this object)
+	recheckIntervalMs: 86_400_000, // 1 day
+};
+
+/** Max wait for /deactivate before Remove completes locally anyway (R2-1). */
+export const DEACTIVATE_TIMEOUT_MS = 10_000;
+
+/** Clock skew tolerated before we treat 'now' as rewound (S-30). */
+export const CLOCK_SKEW_TOLERANCE_MS = 300_000; // 5 minutes
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Pro unlock logic using Polar's public customer-portal license key endpoints.
+ *
+ * Rules:
+ * - No key entered  -> never touches the network.
+ * - Pro is unlocked while the last successful validation is within the grace period
+ *   (and the license itself has not expired).
+ * - A network failure keeps the cached result; only an explicit "not found / not permitted"
+ *   answer from Polar marks the key invalid.
+ */
+export class LicenseManager {
+	constructor(
+		private cache: LicenseCache,
+		private readonly config: LicenseConfig,
+		private readonly http: HttpPost,
+		private readonly now: Clock,
+		private readonly save: (cache: LicenseCache) => Promise<void>,
+		/** Monotonic clock (performance.now); unaffected by wall-clock changes. */
+		private readonly mono: Clock = () => performance.now(),
+		/** Timer used to bound /deactivate (R2-1). The plugin passes window.setTimeout; default never fires. */
+		private readonly delay: (ms: number) => Promise<void> = () => new Promise<void>(() => {}),
+	) {}
+
+	private lastMono: number | null = null;
+
+	/**
+	 * S-33: record that time has passed. Called on load and periodically while Obsidian runs.
+	 * Forward-only: lastSeenAt = max(lastSeenAt + monotonic time elapsed since the last touch, now).
+	 * Never decreases, so a wall clock set back during a session cannot hide elapsed usage.
+	 */
+	async touch(): Promise<void> {
+		if (!this.cache.key || !this.isConfigured()) return;
+		const m = this.mono();
+		const prev = this.cache.lastSeenAt ?? 0;
+		const elapsed = this.lastMono === null ? 0 : Math.max(0, m - this.lastMono);
+		this.lastMono = m;
+		const next = Math.max(prev + (prev ? elapsed : 0), this.now());
+		if (next <= prev) return;
+		await this.update({ ...this.cache, lastSeenAt: next }, true);
+	}
+
+	/** On plugin load: a clock behind lastSeen forces revalidation (S-30/S-33); then record time as usual. */
+	async onLoad(): Promise<LicenseCache> {
+		// S-38: a stored key that is not Pro right now (e.g. grace ran out offline) is re-checked on every load,
+		// so a paying user gets Pro back as soon as they are online again.
+		const result = this.cache.key && this.isConfigured() && !this.isPro() ? await this.validate() : await this.refreshIfDue();
+		await this.touch();
+		return result;
+	}
+
+	get state(): Readonly<LicenseCache> {
+		return this.cache;
+	}
+
+	/** Pure, offline check. Safe to call as often as you like. */
+	isPro(): boolean {
+		// Free-only build (no Polar org ID): Pro never unlocks, even from an old cached result.
+		if (!this.isConfigured()) return false;
+		const c = this.cache;
+		// SEC-1: no key means refreshIfDue()/touch() never run, so a hand-edited data.json
+		// (status 'valid' + future lastValidatedAt/lastSeenAt) would unlock Pro forever offline.
+		if (!c.key || c.status !== 'valid' || c.lastValidatedAt === null) return false;
+		// M-01: with device activations, Pro needs this device's activation id; a key-level grant is not enough.
+		if (this.config.useActivations && !c.activationId) return false;
+		const t = this.effectiveNow();
+		if (c.expiresAt !== null && t >= c.expiresAt) return false;
+		return t - c.lastValidatedAt <= this.config.gracePeriodMs;
+	}
+
+	/** Days left before Pro locks if we stay offline. 0 when not Pro. */
+	graceDaysLeft(): number {
+		if (!this.isPro() || this.cache.lastValidatedAt === null) return 0;
+		const left = this.cache.lastValidatedAt + this.config.gracePeriodMs - this.effectiveNow();
+		return Math.max(0, Math.ceil(left / DAY));
+	}
+
+	/** True when the wall clock is behind the latest time we have seen, beyond the tolerance. */
+	clockRewound(): boolean {
+		const seen = Math.max(this.cache.lastSeenAt ?? 0, this.cache.lastCheckedAt ?? 0, this.cache.lastValidatedAt ?? 0);
+		return this.now() < seen - CLOCK_SKEW_TOLERANCE_MS;
+	}
+
+	/** Never earlier than the latest time we have seen, so rewinding the clock cannot extend grace (S-30). */
+	private effectiveNow(): number {
+		return Math.max(this.now(), this.cache.lastSeenAt ?? 0);
+	}
+
+	isConfigured(): boolean {
+		return UUID_RE.test(this.config.organizationId) && UUID_RE.test(this.config.benefitId);
+	}
+
+	/** User pressed "Activate" with a (new) key. */
+	async activate(rawKey: string, deviceLabel: string): Promise<LicenseCache> {
+		const key = rawKey.trim();
+		if (!key) return this.clear();
+		if (!this.isConfigured()) {
+			return this.update({ ...EMPTY_LICENSE, key, message: 'Passagewise Pro is not on sale yet, so license keys cannot be activated in this version.' });
+		}
+
+		const keyChanged = key !== this.cache.key;
+		this.cache = keyChanged ? { ...EMPTY_LICENSE, key } : { ...this.cache, key };
+
+		this.setDeviceLabel(deviceLabel);
+		if (this.config.useActivations && !this.cache.activationId) {
+			const failed = await this.reserveActivation();
+			if (failed) return failed;
+		}
+		return this.validate();
+	}
+
+	private deviceLabel = 'Obsidian';
+
+	/** S-39: label used when a slot is reserved (e.g. "Obsidian – macOS – a1b2"). */
+	setDeviceLabel(label: string): void {
+		if (label.trim()) this.deviceLabel = label.trim();
+	}
+
+	/** Asks Polar for a device slot. Returns a final state on failure, or null on success. */
+	private async reserveActivation(): Promise<LicenseCache | null> {
+		const res = await this.post('/v1/customer-portal/license-keys/activate', {
+			key: this.cache.key,
+			organization_id: this.config.organizationId,
+			label: this.deviceLabel.slice(0, 100) || 'Obsidian',
+		});
+		if (res === 'offline') return this.markOffline();
+		if (res.status !== 200) {
+			if (res.status === 404 || res.status === 422 || isPolarNotPermitted(res)) return this.markInvalid(res.status);
+			return this.markOffline(); // 401/403 from a proxy or WAF, 5xx, 429 ... (S-31)
+		}
+		const id = (res.json as { id?: unknown }).id;
+		this.cache.activationId = typeof id === 'string' ? id : null;
+		return null;
+	}
+
+	/** Called on plugin load. Re-checks at most once per `recheckIntervalMs`; never if no key. */
+	async refreshIfDue(): Promise<LicenseCache> {
+		if (!this.cache.key || !this.isConfigured()) return this.cache;
+		// Clock moved backwards: treat as a cache miss and revalidate now (S-30).
+		if (this.clockRewound()) return this.validate();
+		const last = this.cache.lastCheckedAt ?? 0;
+		if (this.now() - last < this.config.recheckIntervalMs) return this.cache;
+		return this.validate();
+	}
+
+	/**
+	 * Remove the key and everything cached. S-37: if this device holds a Polar activation,
+	 * release it first (best effort). Removal always completes locally, even if the call fails.
+	 */
+	async clear(): Promise<LicenseCache> {
+		const { key, activationId } = this.cache;
+		let message = '';
+		if (key && activationId && this.isConfigured()) {
+			// R2-1: requestUrl has no timeout; never let a hung request block local removal.
+			const res = await Promise.race([
+				this.post('/v1/customer-portal/license-keys/deactivate', {
+					key,
+					organization_id: this.config.organizationId,
+					activation_id: activationId,
+				}),
+				this.delay(DEACTIVATE_TIMEOUT_MS).then(() => 'offline' as const),
+			]);
+			const released = res !== 'offline' && (res.status === 204 || res.status === 200 || res.status === 404);
+			message = released
+				? 'Key removed. This device\'s slot was released.'
+				: `Key removed, but this device's slot could not be released. Deactivate it in your Polar customer portal (${this.config.portalUrl}).`;
+		}
+		return this.update({ ...EMPTY_LICENSE, message });
+	}
+
+	private async validate(): Promise<LicenseCache> {
+		// M-01: without this device's activation id a key-level validate would say "granted" for any
+		// released device. Stay locked (no request) until the user presses Activate (consistent with S-42).
+		if (this.config.useActivations && !this.cache.activationId) {
+			return this.update({
+				...this.cache,
+				status: 'invalid',
+				lastValidatedAt: null,
+				message: this.cache.message.startsWith('This device was released')
+					? this.cache.message
+					: 'This device is not activated. Press Activate to use Pro here.',
+			});
+		}
+		const body: Record<string, unknown> = {
+			key: this.cache.key,
+			organization_id: this.config.organizationId,
+		};
+		if (this.cache.activationId) body.activation_id = this.cache.activationId;
+
+		const res = await this.post('/v1/customer-portal/license-keys/validate', body);
+		if (res === 'offline') return this.markOffline();
+
+		// S-42: stale activation (the user released this device in the Polar portal). Do NOT take a new
+		// slot automatically; lock Pro and wait for the user to press Activate on this device.
+		if (res.status === 404 && this.cache.activationId && this.config.useActivations) {
+			return this.update({
+				...this.cache,
+				status: 'invalid',
+				activationId: null,
+				lastValidatedAt: null,
+				lastCheckedAt: this.now(),
+				message: 'This device was released in the Polar customer portal. Press Activate to use Pro here again.',
+			});
+		}
+		// Only Polar's 404 / 422 are a verdict on the key. 401/403 (proxy, WAF), 5xx, 429 etc.
+		// are transient: keep the cached result under grace (S-31).
+		if (res.status === 404 || res.status === 422) return this.markInvalid(res.status);
+		if (res.status !== 200) return this.markOffline();
+
+		const verdict = this.checkGrant(res.json);
+		if (verdict === null) return this.markInvalid(res.status);
+		const t = this.now();
+		if (verdict.expiresAt !== null && t >= verdict.expiresAt) return this.markInvalid(res.status);
+		return this.update({
+			...this.cache,
+			status: 'valid',
+			lastValidatedAt: t,
+			lastCheckedAt: t,
+			expiresAt: verdict.expiresAt,
+			lastSeenAt: t, // Polar just confirmed the key: re-anchor the seen clock to now
+			message: 'License valid. Pro features unlocked.',
+		}, true);
+	}
+
+	/**
+	 * Strict check of a 200 validate body. Returns null (not Pro) unless the key is granted,
+	 * belongs to our org, carries our benefit, and has a parseable (or null) expiry.
+	 */
+	private checkGrant(json: unknown): { expiresAt: number | null } | null {
+		if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+		const data = json as { status?: unknown; organization_id?: unknown; benefit_id?: unknown; expires_at?: unknown };
+		if (data.status !== 'granted') return null;
+		if (data.organization_id !== this.config.organizationId) return null;
+		if (data.benefit_id !== this.config.benefitId) return null;
+		if (data.expires_at === null || data.expires_at === undefined) return { expiresAt: null };
+		if (typeof data.expires_at !== 'string') return null;
+		const expiresAt = Date.parse(data.expires_at);
+		return Number.isNaN(expiresAt) ? null : { expiresAt };
+	}
+
+	private async post(path: string, body: Record<string, unknown>): Promise<{ status: number; json: unknown } | 'offline'> {
+		// Defence in depth: a free-only build must never touch the network.
+		if (!this.isConfigured()) return 'offline';
+		try {
+			return await this.http(this.config.apiBase + path, body);
+		} catch {
+			return 'offline';
+		}
+	}
+
+	private markOffline(): Promise<LicenseCache> {
+		const pro = this.isPro();
+		return this.update({
+			...this.cache,
+			lastCheckedAt: this.effectiveNow(),
+			message: pro
+				? 'Could not reach the license server.'
+				: 'Could not reach the license server. Check your connection and try again.',
+		});
+	}
+
+	private markInvalid(httpStatus: number): Promise<LicenseCache> {
+		// 5xx / 429 are server trouble, not a verdict on the key: treat like offline.
+		if (httpStatus >= 500 || httpStatus === 429) return this.markOffline();
+		const why = httpStatus === 403
+			? `This key is already active on 5 devices, or it was refunded. To free a slot, deactivate a device in your Polar customer portal (${this.config.portalUrl}), then press Activate again on this device.`
+			: 'License key not recognised, revoked or expired.';
+		return this.update({
+			...this.cache,
+			status: 'invalid',
+			activationId: null,
+			lastValidatedAt: null,
+			lastCheckedAt: this.now(),
+			message: why,
+		});
+	}
+
+	private async update(next: LicenseCache, reanchor = false): Promise<LicenseCache> {
+		if (next.key && !reanchor) next = { ...next, lastSeenAt: Math.max(next.lastSeenAt ?? 0, this.now()) };
+		this.cache = next;
+		await this.save(next);
+		return next;
+	}
+}
+
+/** Polar's own activation-limit answer (403 with a NotPermitted JSON body), as opposed to a bare proxy/WAF 403. */
+function isPolarNotPermitted(res: { status: number; json: unknown }): boolean {
+	if (res.status !== 403 || !res.json || typeof res.json !== 'object') return false;
+	return (res.json as { error?: unknown }).error === 'NotPermitted';
+}
