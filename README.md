@@ -4,7 +4,7 @@ An Obsidian plugin that imports ebook highlights into one note per book. Re-impo
 
 Compatible with Kindle, Kobo, and KOReader export files. Passagewise is not created or endorsed by Amazon, Rakuten Kobo, or the KOReader project.
 
-Public repository: [smallbench-labs/passagewise](https://github.com/smallbench-labs/passagewise). Pro checkout is not open (`CHECKOUT_READY = false`) and will stay closed until submission day. The Polar product exists; the license-key benefit ID is not yet in this build, so **Activate** does not contact the network and Pro cannot unlock.
+Public repository: [smallbench-labs/passagewise](https://github.com/smallbench-labs/passagewise). Pro checkout is not open (`CHECKOUT_READY = false`) and will stay closed until submission day: the settings tab does not call `/api/region` and does not show Buy Pro. The Polar product and license-key benefit IDs are in this build, so **Activate** (and a later check if a key is already saved) will contact Polar.
 
 ## Formats
 

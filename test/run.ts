@@ -629,20 +629,30 @@ jobs.push(test('Summary text', () => {
 		'Added 3 highlights to 2 books (2 notes updated).\nSkipped 5 already in your notes.\n2 entries could not be read.');
 }));
 
-jobs.push(test('License: missing benefit UUID makes no request and never unlock; benefit_id must match', async () => {
+jobs.push(test('License: shipped IDs are configured; CHECKOUT_READY stays false; benefit_id must match', async () => {
 	eq(CHECKOUT_READY, false, 'CHECKOUT_READY must stay false until submission day');
 	eq(CHECKOUT_URL, 'https://formchime.com/api/checkout?product=passagewise-pro');
 	eq(DEFAULT_LICENSE_CONFIG.organizationId, '189678f8-c892-4af0-8586-0bf2a6873e02');
 	eq(DEFAULT_LICENSE_CONFIG.productId, '5cbf2191-abb9-4485-aa63-649bad01ca7d');
+	eq(DEFAULT_LICENSE_CONFIG.benefitId, 'b91d76b3-34c4-443c-ad8a-c9e8264bee8a');
 	eq(DEFAULT_LICENSE_CONFIG.useActivations, true);
 	eq(DEFAULT_LICENSE_CONFIG.apiBase, 'https://api.polar.sh');
-	let calls = 0;
-	const lm0 = new LicenseManager({ ...EMPTY_LICENSE }, DEFAULT_LICENSE_CONFIG, async () => { calls++; return { status: 200, json: {} }; }, () => Date.now(), async () => {});
-	assert(!lm0.isConfigured(), 'shipped config must stay unconfigured until the benefit UUID is set');
-	await lm0.activate('SOME-KEY', 'Obsidian – Linux – test');
-	assert(calls === 0 && !lm0.isPro(), 'placeholder benefit: no request, no Pro');
-	assert(/^PLACEHOLDER-/.test(DEFAULT_LICENSE_CONFIG.benefitId), 'benefit id is still a visible placeholder');
 	assert(DEFAULT_LICENSE_CONFIG.benefitId !== '3ee8f2d9-246f-4e6f-8c5e-e4336400503a' && DEFAULT_LICENSE_CONFIG.benefitId !== '5ec5a70e-bb98-4923-b040-5c5679f9daa8', 'not the Docxwise or Streakwise benefit');
+	const shipped = new LicenseManager({ ...EMPTY_LICENSE }, DEFAULT_LICENSE_CONFIG, async () => ({ status: 200, json: {} }), () => Date.now(), async () => {});
+	assert(shipped.isConfigured(), 'shipped org and benefit UUIDs must make isConfigured() true');
+	// CHECKOUT_READY does not gate license HTTP: Activate still calls Polar once the IDs are real.
+	let calls = 0;
+	const urls: string[] = [];
+	const lm0 = new LicenseManager({ ...EMPTY_LICENSE }, DEFAULT_LICENSE_CONFIG, async (url) => {
+		calls++;
+		urls.push(url);
+		if (url.endsWith('/activate')) return { status: 200, json: { id: 'act-1' } };
+		return { status: 200, json: { status: 'granted', organization_id: DEFAULT_LICENSE_CONFIG.organizationId, benefit_id: DEFAULT_LICENSE_CONFIG.benefitId, expires_at: null } };
+	}, () => Date.now(), async () => {}, () => 0);
+	await lm0.activate('SOME-KEY', 'Obsidian – Linux – test');
+	assert(calls >= 1, 'Activate contacts Polar even while CHECKOUT_READY is false');
+	assert(urls.some((u) => u.endsWith('/activate')), 'Activate uses the Polar activate endpoint');
+	assert(lm0.isPro(), 'a matching Passagewise benefit unlocks Pro');
 	const cfg = { ...DEFAULT_LICENSE_CONFIG, productId: '11111111-1111-1111-1111-111111111111', benefitId: '22222222-2222-2222-2222-222222222222' };
 	const polar = (benefit: string): HttpPost => async (url) => url.endsWith('/activate')
 		? { status: 200, json: { id: 'act-1' } }

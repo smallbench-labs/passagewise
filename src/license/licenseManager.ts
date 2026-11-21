@@ -4,13 +4,14 @@ const DAY = 24 * 60 * 60 * 1000;
 
 export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
 	organizationId: '189678f8-c892-4af0-8586-0bf2a6873e02',
-	// Passagewise Pro (Polar, created 2026-11-21): one-time US$12, license-key benefit with prefix
-	// PASSAGEWISE, 5 activations, no expiry. productId is real. benefitId is still a placeholder
-	// (not a UUID), so isConfigured() is false: Activate makes no network request and Pro never
-	// unlocks. Replace benefitId with the production benefit UUID when it is provided.
+	// Passagewise Pro (Polar, created 2026-11-21): one-time US$12, license-key benefit
+	// "Passagewise Pro license" with prefix PASSAGEWISE, 5 activations, no expiry,
+	// unlimited usage; the customer can manage activations. productId and benefitId are real,
+	// so isConfigured() is true: Activate / onLoad with a saved key will call Polar.
+	// CHECKOUT_READY is independent and stays false until submission day (no Buy Pro, no /api/region).
 	// Keys of other FormChime products (Docxwise, Streakwise) are rejected by the benefit_id check.
 	productId: '5cbf2191-abb9-4485-aa63-649bad01ca7d',
-	benefitId: 'PLACEHOLDER-passagewise-pro-benefit-id',
+	benefitId: 'b91d76b3-34c4-443c-ad8a-c9e8264bee8a',
 	useActivations: true, // Polar benefit: 5 activations per key, keys never expire
 	portalUrl: 'https://polar.sh/formchime/portal',
 	apiBase: 'https://api.polar.sh',
