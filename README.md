@@ -4,7 +4,7 @@ An Obsidian plugin that imports ebook highlights into one note per book. Re-impo
 
 Compatible with Kindle, Kobo, and KOReader export files. Passagewise is not created or endorsed by Amazon, Rakuten Kobo, or the KOReader project.
 
-Public repository: [smallbench-labs/passagewise](https://github.com/smallbench-labs/passagewise). Pro checkout is not open (`CHECKOUT_READY = false`) and will stay closed until submission day: the settings tab does not call `/api/region` and does not show Buy Pro. The Polar product and license-key benefit IDs are in this build, so **Activate** (and a later check if a key is already saved) will contact Polar.
+Passagewise Pro (Kobo and KOReader imports) is a one-time purchase of US$12 through Polar. Kindle imports are free. Not sold in Japan. [Terms](https://formchime.com/passagewise/terms) · [Privacy](https://formchime.com/passagewise/privacy)
 
 ## Formats
 
@@ -51,7 +51,7 @@ Re-import rules:
 
 - Importing never uses the network. Passagewise does not talk to Amazon, Kobo, any cloud service, or USB devices; it only reads the file you choose. A file picked with **Choose a file on this device…** is read once in memory and is not copied into the vault.
 - Pro license (only after you enter a key and press **Activate**): the key, the FormChime Polar organization ID, an activation ID and a device label such as `Obsidian – macOS – a1b2` are sent to Polar (`api.polar.sh`) to activate and validate the key, then at most once a day. **Remove** sends the key and activation ID to Polar to free the device slot. A key is accepted only if Polar reports the Passagewise Pro license benefit (`benefit_id` check), so keys for other FormChime products do not unlock Pro.
-- Once Pro is on sale, opening the settings tab without an active key calls `https://formchime.com/api/region` to decide whether to show Buy Pro (it is not sold in Japan). In this prototype (`CHECKOUT_READY = false`) that request is never made.
+- Opening the settings tab without an active key calls `https://formchime.com/api/region` to decide whether to show Buy Pro (it is not sold in Japan). The server sees only your IP address and stores nothing.
 - No telemetry, analytics or ads. Highlights, book titles, note contents, file names and vault names are never sent anywhere.
 - The license key is kept in Obsidian Keychain (Obsidian 1.11.4+), otherwise in this plugin's `data.json`.
 

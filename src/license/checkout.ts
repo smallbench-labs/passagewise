@@ -3,11 +3,10 @@
  * Never link a Polar checkout page directly: the gate blocks Japan and
  * creates the Polar checkout server-side.
  */
-// Polar product exists (2026-11-21). The gate entry 'passagewise-pro' stays enabled:false until
-// submission day. While CHECKOUT_READY is false, the settings tab makes no region request and
-// shows "not on sale yet" instead of Buy Pro.
+// Checkout opened 2026-11-28 (gate entry 'passagewise-pro' enabled:true). Opening the settings tab
+// without an active Pro key calls /api/region before Buy Pro is shown (not sold in Japan).
 export const CHECKOUT_URL = 'https://formchime.com/api/checkout?product=passagewise-pro';
-export const CHECKOUT_READY = false;
+export const CHECKOUT_READY = true;
 export const REGION_URL = 'https://formchime.com/api/region';
 
 export type HttpGetJson = (url: string) => Promise<{ status: number; json: unknown }>;

@@ -2,7 +2,7 @@
  * Purchase consent next to "Buy Pro". Pure, no `obsidian` import.
  * Never persisted: a fresh ConsentState (unchecked) is created each time the settings tab is drawn.
  */
-// PLACEHOLDER: these pages are drafts (docs/), not deployed. Shown only when CHECKOUT_READY is true.
+// Live on formchime.com from 2026-11-28 (en, zh-TW, ja).
 export const TERMS_URL = 'https://formchime.com/passagewise/terms';
 export const PRIVACY_URL = 'https://formchime.com/passagewise/privacy';
 export const CONSENT_HINT = 'Check the box above to continue.';

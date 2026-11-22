@@ -629,8 +629,8 @@ jobs.push(test('Summary text', () => {
 		'Added 3 highlights to 2 books (2 notes updated).\nSkipped 5 already in your notes.\n2 entries could not be read.');
 }));
 
-jobs.push(test('License: shipped IDs are configured; CHECKOUT_READY stays false; benefit_id must match', async () => {
-	eq(CHECKOUT_READY, false, 'CHECKOUT_READY must stay false until submission day');
+jobs.push(test('License: shipped IDs are configured; CHECKOUT_READY is on; benefit_id must match', async () => {
+	eq(CHECKOUT_READY, true, 'CHECKOUT_READY is true from 0.1.0 (checkout opened 2026-11-28)');
 	eq(CHECKOUT_URL, 'https://formchime.com/api/checkout?product=passagewise-pro');
 	eq(DEFAULT_LICENSE_CONFIG.organizationId, '189678f8-c892-4af0-8586-0bf2a6873e02');
 	eq(DEFAULT_LICENSE_CONFIG.productId, '5cbf2191-abb9-4485-aa63-649bad01ca7d');
@@ -650,7 +650,7 @@ jobs.push(test('License: shipped IDs are configured; CHECKOUT_READY stays false;
 		return { status: 200, json: { status: 'granted', organization_id: DEFAULT_LICENSE_CONFIG.organizationId, benefit_id: DEFAULT_LICENSE_CONFIG.benefitId, expires_at: null } };
 	}, () => Date.now(), async () => {}, () => 0);
 	await lm0.activate('SOME-KEY', 'Obsidian – Linux – test');
-	assert(calls >= 1, 'Activate contacts Polar even while CHECKOUT_READY is false');
+	assert(calls >= 1, 'Activate contacts Polar');
 	assert(urls.some((u) => u.endsWith('/activate')), 'Activate uses the Polar activate endpoint');
 	assert(lm0.isPro(), 'a matching Passagewise benefit unlocks Pro');
 	const cfg = { ...DEFAULT_LICENSE_CONFIG, productId: '11111111-1111-1111-1111-111111111111', benefitId: '22222222-2222-2222-2222-222222222222' };

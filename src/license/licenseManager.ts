@@ -8,7 +8,7 @@ export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
 	// "Passagewise Pro license" with prefix PASSAGEWISE, 5 activations, no expiry,
 	// unlimited usage; the customer can manage activations. productId and benefitId are real,
 	// so isConfigured() is true: Activate / onLoad with a saved key will call Polar.
-	// CHECKOUT_READY is independent and stays false until submission day (no Buy Pro, no /api/region).
+	// CHECKOUT_READY is independent of licensing: it only controls Buy Pro and the /api/region check.
 	// Keys of other FormChime products (Docxwise, Streakwise) are rejected by the benefit_id check.
 	productId: '5cbf2191-abb9-4485-aa63-649bad01ca7d',
 	benefitId: 'b91d76b3-34c4-443c-ad8a-c9e8264bee8a',
