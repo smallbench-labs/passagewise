@@ -2,7 +2,7 @@ import esbuild from 'esbuild';
 import { readFile } from 'node:fs/promises';
 const prod = process.argv[2] === 'production';
 const manifest = JSON.parse(await readFile('manifest.json', 'utf8'));
-const banner = `/*! Passagewise ${manifest.version} - Copyright (c) 2026 Smallbench Labs (Roger Chang) - MIT License. */`;
+const banner = `/*! Passagewise ${manifest.version} - Copyright (c) 2026 Smallbench Labs - MIT License. */`;
 await esbuild.build({
 	entryPoints: ['src/main.ts'],
 	bundle: true,
