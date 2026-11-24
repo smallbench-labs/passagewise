@@ -2,6 +2,12 @@
 
 An Obsidian plugin that imports ebook highlights into one note per book. Re-importing adds only new highlights and never rewrites text that is already in the note, including anything you wrote yourself.
 
+**Kindle import is free; Kobo and KOReader import are in Pro.** Passagewise Pro is a one-time purchase of US$12 through Polar. Not sold in Japan. [Terms](https://formchime.com/passagewise/terms) · [Privacy](https://formchime.com/passagewise/privacy)
+
+![Passagewise note after importing highlights from a synthetic Kobo database of Pride and Prejudice](docs/kobo-import-pride-and-prejudice.png)
+
+The screenshot is the note Passagewise wrote from a synthetic `KoboReader.sqlite` fixture of Jane Austen’s public-domain novel *Pride and Prejudice* (1813). It is not a capture from a physical Kobo device. See `docs/kobo-import-pride-and-prejudice.md`.
+
 Compatible with Kindle, Kobo, and KOReader export files. Passagewise is not created or endorsed by Amazon, Rakuten Kobo, or the KOReader project.
 
 Public repository: [smallbench-labs/passagewise](https://github.com/smallbench-labs/passagewise). Pro checkout is not open (`CHECKOUT_READY = false`) and will stay closed until submission day: the settings tab does not call `/api/region` and does not show Buy Pro. The Polar product and license-key benefit IDs are in this build, so **Activate** (and a later check if a key is already saved) will contact Polar.
